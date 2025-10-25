@@ -13,7 +13,7 @@ from textual.widgets import Footer, Header, Markdown, Static
 
 from miniflux_tui.api.models import Entry
 from miniflux_tui.constants import CONTENT_SEPARATOR
-from miniflux_tui.utils import get_star_icon
+from miniflux_tui.utils import api_call, get_star_icon
 
 if TYPE_CHECKING:
     from miniflux_tui.ui.app import MinifluxTUI
@@ -160,36 +160,27 @@ class EntryReaderScreen(Screen):
 
     async def action_mark_unread(self):
         """Mark entry as unread."""
-        if hasattr(self.app, "client") and self.app.client:
-            try:
-                await self.app.client.mark_as_unread(self.entry.id)
-                self.entry.status = "unread"
-                self.notify("Marked as unread")
-            except Exception as e:
-                self.notify(f"Error marking as unread: {e}", severity="error")
+        async with api_call(self, "marking entry as unread") as client:
+            await client.mark_as_unread(self.entry.id)
+            self.entry.status = "unread"
+            self.notify("Marked as unread")
 
     async def action_toggle_star(self):
         """Toggle star status."""
-        if hasattr(self.app, "client") and self.app.client:
-            try:
-                await self.app.client.toggle_starred(self.entry.id)
-                self.entry.starred = not self.entry.starred
-                status = "starred" if self.entry.starred else "unstarred"
-                self.notify(f"Entry {status}")
+        async with api_call(self, "toggling star status") as client:
+            await client.toggle_starred(self.entry.id)
+            self.entry.starred = not self.entry.starred
+            status = "starred" if self.entry.starred else "unstarred"
+            self.notify(f"Entry {status}")
 
-                # Refresh display to update star icon
-                await self.refresh_screen()
-            except Exception as e:
-                self.notify(f"Error toggling star: {e}", severity="error")
+            # Refresh display to update star icon
+            await self.refresh_screen()
 
     async def action_save_entry(self):
         """Save entry to third-party service."""
-        if hasattr(self.app, "client") and self.app.client:
-            try:
-                await self.app.client.save_entry(self.entry.id)
-                self.notify(f"Entry saved: {self.entry.title}")
-            except Exception as e:
-                self.notify(f"Failed to save entry: {e}", severity="error")
+        async with api_call(self, "saving entry") as client:
+            await client.save_entry(self.entry.id)
+            self.notify(f"Entry saved: {self.entry.title}")
 
     def action_open_browser(self):
         """Open entry URL in web browser."""
@@ -201,27 +192,22 @@ class EntryReaderScreen(Screen):
 
     async def action_fetch_original(self):
         """Fetch original content from source."""
-        if hasattr(self.app, "client") and self.app.client:
-            try:
-                self.notify("Fetching original content...")
+        async with api_call(self, "fetching original content") as client:
+            self.notify("Fetching original content...")
 
-                # Fetch original content from API
-                original_content = await self.app.client.fetch_original_content(self.entry.id)
+            # Fetch original content from API
+            original_content = await client.fetch_original_content(self.entry.id)
 
-                if original_content:
-                    # Update the entry's content
-                    self.entry.content = original_content
+            if original_content:
+                # Update the entry's content
+                self.entry.content = original_content
 
-                    # Refresh the screen to show new content
-                    await self.refresh_screen()
+                # Refresh the screen to show new content
+                await self.refresh_screen()
 
-                    self.notify("Original content loaded")
-                else:
-                    self.notify("No original content available", severity="warning")
-            except Exception as e:
-                self.log(f"Error fetching original content: {e}")
-                self.log(traceback.format_exc())
-                self.notify(f"Error fetching content: {e}", severity="error")
+                self.notify("Original content loaded")
+            else:
+                self.notify("No original content available", severity="warning")
 
     async def action_next_entry(self):
         """Navigate to next entry."""
